@@ -1,0 +1,33 @@
+{
+  "title": "Haushaltsaufgaben",
+  "services": {
+    "add_entry": {
+      "name": "Eintrag hinzufügen",
+      "description": "Fügt Minuten für die Haushaltsaufgaben eines Kindes hinzu.",
+      "fields": {
+        "child": {
+          "name": "Kind",
+          "description": "Der Name des Kindes."
+        },
+        "minutes": {
+          "name": "Minuten",
+          "description": "Anzahl der geleisteten Minuten."
+        },
+        "note": {
+          "name": "Notiz",
+          "description": "Optionale Beschreibung der Aufgabe."
+        }
+      }
+    },
+    "reset_child": {
+      "name": "Kind zurücksetzen",
+      "description": "Setzt alle Einträge für ein Kind zurück.",
+      "fields": {
+        "child": {
+          "name": "Kind",
+          "description": "Der Name des Kindes."
+        }
+      }
+    }
+  }
+}

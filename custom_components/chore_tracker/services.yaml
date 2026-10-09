@@ -1,0 +1,39 @@
+add_entry:
+  name: Add Chore Entry
+  description: Add minutes for a child's chore work.
+  fields:
+    child:
+      name: Child
+      description: The child's name.
+      required: true
+      example: "Emma"
+      selector:
+        text:
+    minutes:
+      name: Minutes
+      description: Number of minutes worked.
+      required: true
+      example: 15
+      selector:
+        number:
+          min: 1
+          max: 480
+    note:
+      name: Note
+      description: Optional description of the chore.
+      required: false
+      example: "Cleaned the kitchen"
+      selector:
+        text:
+
+reset_child:
+  name: Reset Child
+  description: Reset all chore entries for a child.
+  fields:
+    child:
+      name: Child
+      description: The child's name.
+      required: true
+      example: "Emma"
+      selector:
+        text:
