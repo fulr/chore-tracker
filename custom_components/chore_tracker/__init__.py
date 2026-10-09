@@ -20,7 +20,7 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "7"
+JS_VERSION = "8"
 JS_URL = f"/local/{JS_FILENAME}?v={JS_VERSION}"
 
 SERVICE_ADD_ENTRY = "add_entry"
@@ -58,15 +58,16 @@ def _install_card(hass: HomeAssistant) -> None:
 async def _register_lovelace_resource(hass: HomeAssistant) -> None:
     """Register the card JS via the live Lovelace resource collection."""
     try:
-        lovelace_data = hass.data.get("lovelace")
+        from homeassistant.components.lovelace.const import LOVELACE_DATA
+        from homeassistant.components.lovelace.resources import ResourceStorageCollection
+
+        lovelace_data = hass.data.get(LOVELACE_DATA)
         if lovelace_data is None:
             _LOGGER.warning("Lovelace not loaded, cannot register resource")
             return
 
         resource_collection = lovelace_data.resources
 
-        # Only ResourceStorageCollection supports mutations
-        from homeassistant.components.lovelace.resources import ResourceStorageCollection
         if not isinstance(resource_collection, ResourceStorageCollection):
             _LOGGER.debug("Lovelace in YAML mode, skipping resource registration")
             return
