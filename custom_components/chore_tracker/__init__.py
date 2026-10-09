@@ -9,7 +9,7 @@ from pathlib import Path
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
 
@@ -20,7 +20,8 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "6"
+JS_VERSION = "7"
+JS_URL = f"/local/{JS_FILENAME}?v={JS_VERSION}"
 
 SERVICE_ADD_ENTRY = "add_entry"
 SERVICE_RESET_CHILD = "reset_child"
@@ -45,7 +46,7 @@ RESET_CHILD_SCHEMA = vol.Schema(
 
 
 def _install_card(hass: HomeAssistant) -> None:
-    """Copy the Lovelace card JS into config/www and register it as a resource."""
+    """Copy the Lovelace card JS into config/www."""
     src = Path(__file__).parent / JS_FILENAME
     www_dir = Path(hass.config.config_dir) / "www"
     www_dir.mkdir(exist_ok=True)
@@ -54,14 +55,58 @@ def _install_card(hass: HomeAssistant) -> None:
     _LOGGER.debug("Installed %s -> %s", src, dst)
 
 
+async def _register_lovelace_resource(hass: HomeAssistant) -> None:
+    """Register the card JS via the live Lovelace resource collection."""
+    try:
+        lovelace_data = hass.data.get("lovelace")
+        if lovelace_data is None:
+            _LOGGER.warning("Lovelace not loaded, cannot register resource")
+            return
+
+        resource_collection = lovelace_data.resources
+
+        # Only ResourceStorageCollection supports mutations
+        from homeassistant.components.lovelace.resources import ResourceStorageCollection
+        if not isinstance(resource_collection, ResourceStorageCollection):
+            _LOGGER.debug("Lovelace in YAML mode, skipping resource registration")
+            return
+
+        await resource_collection._async_ensure_loaded()
+
+        # Remove outdated entries for this JS file
+        for item in list(resource_collection.async_items()):
+            if JS_FILENAME in item.get("url", ""):
+                if item["url"] == JS_URL:
+                    _LOGGER.debug("Resource already registered: %s", JS_URL)
+                    return
+                await resource_collection.async_delete_item(item["id"])
+                _LOGGER.debug("Removed outdated resource: %s", item["url"])
+
+        # Register the current version
+        await resource_collection.async_create_item(
+            {"res_type": "module", "url": JS_URL}
+        )
+        _LOGGER.info("Lovelace resource registered: %s", JS_URL)
+
+    except Exception as err:
+        _LOGGER.error("Failed to register Lovelace resource: %s", err)
+
+
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Chore Tracker component."""
 
-    # Install / update the card JS file
+    # Copy the JS file into www/
     await hass.async_add_executor_job(_install_card, hass)
 
-    # Auto-register the Lovelace resource so users don't have to do it manually
-    await _ensure_lovelace_resource(hass)
+    # Register resource once Lovelace has finished setting up
+    @callback
+    def _on_lovelace_loaded(_now=None):
+        hass.async_create_task(_register_lovelace_resource(hass))
+
+    if hass.is_running:
+        _on_lovelace_loaded()
+    else:
+        hass.bus.async_listen_once("homeassistant_started", _on_lovelace_loaded)
 
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     data = await store.async_load() or {"children": {}}
@@ -118,18 +163,3 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     websocket_api.async_register_command(hass, ws_get_data)
 
     return True
-
-
-async def _ensure_lovelace_resource(hass: HomeAssistant) -> None:
-    """Add the card JS as a Lovelace resource if not already registered."""
-    url = f"/local/{JS_FILENAME}?v={JS_VERSION}"
-    resources_store = Store(hass, 1, "lovelace_resources")
-    data = await resources_store.async_load() or {"items": []}
-    items = data.setdefault("items", [])
-
-    # Remove any outdated entry for this file, then add the current versioned one
-    items[:] = [i for i in items if JS_FILENAME not in i.get("url", "")]
-    items.append({"id": DOMAIN, "type": "module", "url": url})
-
-    await resources_store.async_save(data)
-    _LOGGER.debug("Lovelace resource registered: %s", url)
