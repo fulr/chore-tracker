@@ -20,7 +20,7 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "5"
+JS_VERSION = "6"
 
 SERVICE_ADD_ENTRY = "add_entry"
 SERVICE_RESET_CHILD = "reset_child"

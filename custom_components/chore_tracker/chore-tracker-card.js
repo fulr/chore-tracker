@@ -598,9 +598,9 @@ customElements.define("chore-tracker-card-editor", ChoreTrackerCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "chore-tracker-card",
-  name: "Chore Tracker",
-  description: "Track household chore minutes for children.",
-  preview: false,
+  name: "Haushaltsaufgaben",
+  description: "Minuten für Haushaltsaufgaben pro Kind erfassen.",
+  documentationURL: "https://github.com/anomalyco/chore-tracker",
 });
 
 console.info(
