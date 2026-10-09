@@ -11,7 +11,7 @@ from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
-from homeassistant.core import CoreState, HomeAssistant, ServiceCall, callback
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
 
@@ -22,7 +22,7 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "9"
+JS_VERSION = "10"
 JS_URL = f"/{DOMAIN}/{JS_FILENAME}"
 JS_URL_VERSIONED = f"{JS_URL}?v={JS_VERSION}"
 
@@ -51,21 +51,23 @@ RESET_CHILD_SCHEMA = vol.Schema(
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Chore Tracker component."""
 
-    # Serve the JS file directly from the integration folder — no www/ copy needed
+    # Serve the JS file directly from the integration folder
     js_path = str(Path(__file__).parent / JS_FILENAME)
     await hass.http.async_register_static_paths(
         [StaticPathConfig(JS_URL, js_path, cache_headers=False)]
     )
 
-    # add_extra_js_url ensures it loads in YAML mode and HA Cast
-    add_extra_js_url(hass, JS_URL_VERSIONED)
+    async def _register_frontend(_=None) -> None:
+        """Register JS with the frontend and Lovelace once frontend is ready."""
 
-    # Register as a Lovelace resource (storage mode) after HA has fully started
-    async def _register_resource(_event=None) -> None:
+        # add_extra_js_url injects it on every page load (works in YAML mode + Cast)
+        add_extra_js_url(hass, JS_URL_VERSIONED)
+
+        # Also register as a persisted Lovelace resource (shows in add-card picker)
         try:
             lovelace = hass.data.get("lovelace")
             if lovelace is None:
-                _LOGGER.warning("Lovelace not available, skipping resource registration")
+                _LOGGER.warning("Lovelace not in hass.data, skipping resource registration")
                 return
 
             resources = (
@@ -76,8 +78,8 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
             if resources is None:
                 return
 
-            # Must load storage before reading or writing — avoids overwriting
-            # other integrations' resources with an empty collection
+            # Load storage before reading or writing to avoid overwriting other
+            # integrations' resources with an empty in-memory collection
             if not resources.loaded:
                 await resources.async_load()
                 resources.loaded = True
@@ -123,10 +125,10 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         except Exception as err:
             _LOGGER.error("Failed to register Lovelace resource: %s", err)
 
-    if hass.state == CoreState.running:
-        await _register_resource()
+    if hass.is_running:
+        hass.async_create_task(_register_frontend())
     else:
-        hass.bus.async_listen_once("homeassistant_started", _register_resource)
+        hass.bus.async_listen_once("homeassistant_started", _register_frontend)
 
     # Data store
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
