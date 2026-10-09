@@ -2,8 +2,8 @@
   "domain": "chore_tracker",
   "name": "Chore Tracker",
   "version": "1.0.0",
-  "documentation": "https://github.com/local/chore_tracker",
-  "dependencies": [],
+  "documentation": "https://github.com/fulr/chore-tracker",
+  "dependencies": ["frontend", "http"],
   "codeowners": [],
   "requirements": [],
   "iot_class": "local_push"

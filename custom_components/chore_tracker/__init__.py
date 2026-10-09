@@ -2,14 +2,16 @@
 from __future__ import annotations
 
 import logging
-import shutil
 from datetime import datetime
 from pathlib import Path
 
 import voluptuous as vol
 
 from homeassistant.components import websocket_api
-from homeassistant.core import HomeAssistant, ServiceCall, callback
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.lovelace.resources import ResourceStorageCollection
+from homeassistant.core import CoreState, HomeAssistant, ServiceCall, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
 
@@ -20,8 +22,9 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "8"
-JS_URL = f"/local/{JS_FILENAME}?v={JS_VERSION}"
+JS_VERSION = "9"
+JS_URL = f"/{DOMAIN}/{JS_FILENAME}"
+JS_URL_VERSIONED = f"{JS_URL}?v={JS_VERSION}"
 
 SERVICE_ADD_ENTRY = "add_entry"
 SERVICE_RESET_CHILD = "reset_child"
@@ -45,70 +48,87 @@ RESET_CHILD_SCHEMA = vol.Schema(
 )
 
 
-def _install_card(hass: HomeAssistant) -> None:
-    """Copy the Lovelace card JS into config/www."""
-    src = Path(__file__).parent / JS_FILENAME
-    www_dir = Path(hass.config.config_dir) / "www"
-    www_dir.mkdir(exist_ok=True)
-    dst = www_dir / JS_FILENAME
-    shutil.copy2(src, dst)
-    _LOGGER.debug("Installed %s -> %s", src, dst)
-
-
-async def _register_lovelace_resource(hass: HomeAssistant) -> None:
-    """Register the card JS via the live Lovelace resource collection."""
-    try:
-        from homeassistant.components.lovelace.const import LOVELACE_DATA
-        from homeassistant.components.lovelace.resources import ResourceStorageCollection
-
-        lovelace_data = hass.data.get(LOVELACE_DATA)
-        if lovelace_data is None:
-            _LOGGER.warning("Lovelace not loaded, cannot register resource")
-            return
-
-        resource_collection = lovelace_data.resources
-
-        if not isinstance(resource_collection, ResourceStorageCollection):
-            _LOGGER.debug("Lovelace in YAML mode, skipping resource registration")
-            return
-
-        await resource_collection._async_ensure_loaded()
-
-        # Remove outdated entries for this JS file
-        for item in list(resource_collection.async_items()):
-            if JS_FILENAME in item.get("url", ""):
-                if item["url"] == JS_URL:
-                    _LOGGER.debug("Resource already registered: %s", JS_URL)
-                    return
-                await resource_collection.async_delete_item(item["id"])
-                _LOGGER.debug("Removed outdated resource: %s", item["url"])
-
-        # Register the current version
-        await resource_collection.async_create_item(
-            {"res_type": "module", "url": JS_URL}
-        )
-        _LOGGER.info("Lovelace resource registered: %s", JS_URL)
-
-    except Exception as err:
-        _LOGGER.error("Failed to register Lovelace resource: %s", err)
-
-
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up the Chore Tracker component."""
 
-    # Copy the JS file into www/
-    await hass.async_add_executor_job(_install_card, hass)
+    # Serve the JS file directly from the integration folder — no www/ copy needed
+    js_path = str(Path(__file__).parent / JS_FILENAME)
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(JS_URL, js_path, cache_headers=False)]
+    )
 
-    # Register resource once Lovelace has finished setting up
-    @callback
-    def _on_lovelace_loaded(_now=None):
-        hass.async_create_task(_register_lovelace_resource(hass))
+    # add_extra_js_url ensures it loads in YAML mode and HA Cast
+    add_extra_js_url(hass, JS_URL_VERSIONED)
 
-    if hass.is_running:
-        _on_lovelace_loaded()
+    # Register as a Lovelace resource (storage mode) after HA has fully started
+    async def _register_resource(_event=None) -> None:
+        try:
+            lovelace = hass.data.get("lovelace")
+            if lovelace is None:
+                _LOGGER.warning("Lovelace not available, skipping resource registration")
+                return
+
+            resources = (
+                lovelace.resources
+                if hasattr(lovelace, "resources")
+                else lovelace.get("resources")
+            )
+            if resources is None:
+                return
+
+            # Must load storage before reading or writing — avoids overwriting
+            # other integrations' resources with an empty collection
+            if not resources.loaded:
+                await resources.async_load()
+                resources.loaded = True
+
+            all_items = list(resources.async_items())
+
+            # Remove stale entries from old installation paths (e.g. /local/)
+            if isinstance(resources, ResourceStorageCollection):
+                for item in all_items:
+                    url = item.get("url", "")
+                    if JS_FILENAME in url and JS_URL not in url:
+                        await resources.async_delete_item(item["id"])
+                        _LOGGER.debug("Removed stale resource: %s", url)
+
+            # Find current-path entry
+            current = next(
+                (i for i in all_items if JS_URL in i.get("url", "")), None
+            )
+
+            if current is None:
+                if isinstance(resources, ResourceStorageCollection):
+                    await resources.async_create_item(
+                        {"res_type": "module", "url": JS_URL_VERSIONED}
+                    )
+                    _LOGGER.info("Registered Lovelace resource: %s", JS_URL_VERSIONED)
+                else:
+                    _LOGGER.info(
+                        "YAML mode: add manually — url: %s, type: module",
+                        JS_URL_VERSIONED,
+                    )
+            elif current["url"] == JS_URL_VERSIONED:
+                _LOGGER.debug("Resource already current: %s", JS_URL_VERSIONED)
+            else:
+                if isinstance(resources, ResourceStorageCollection):
+                    await resources.async_update_item(
+                        current["id"],
+                        {"res_type": "module", "url": JS_URL_VERSIONED},
+                    )
+                    _LOGGER.info("Updated Lovelace resource: %s", JS_URL_VERSIONED)
+                else:
+                    current["url"] = JS_URL_VERSIONED
+
+        except Exception as err:
+            _LOGGER.error("Failed to register Lovelace resource: %s", err)
+
+    if hass.state == CoreState.running:
+        await _register_resource()
     else:
-        hass.bus.async_listen_once("homeassistant_started", _on_lovelace_loaded)
+        hass.bus.async_listen_once("homeassistant_started", _register_resource)
 
+    # Data store
     store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
     data = await store.async_load() or {"children": {}}
     hass.data[DOMAIN] = {"store": store, "data": data}
@@ -154,7 +174,6 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
         DOMAIN, SERVICE_RESET_CHILD, handle_reset_child, schema=RESET_CHILD_SCHEMA
     )
 
-    # Register WebSocket command so the Lovelace card can fetch data
     @websocket_api.websocket_command({"type": f"{DOMAIN}/get_data"})
     @websocket_api.async_response
     async def ws_get_data(hass, connection, msg):
