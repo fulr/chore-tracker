@@ -23,7 +23,7 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "10"
+JS_VERSION = "11"
 JS_URL = f"/{DOMAIN}/{JS_FILENAME}"
 JS_URL_VERSIONED = f"{JS_URL}?v={JS_VERSION}"
 

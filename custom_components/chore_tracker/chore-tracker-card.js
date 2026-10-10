@@ -26,8 +26,21 @@ class ChoreTrackerCard extends HTMLElement {
   }
 
   set hass(hass) {
+    const firstHass = !this._hass;
+    const connectionChanged =
+      this._hass && this._hass.connection !== hass.connection;
     this._hass = hass;
-    this._render();
+
+    // HA supplies a new hass object frequently. Rebuilding the card DOM on
+    // every update replaces the inputs and steals focus while the user types.
+    if (connectionChanged && this._unsubscribe) {
+      this._unsubscribe();
+      this._unsubscribe = null;
+      this._subscribeEvents();
+    }
+    if (firstHass) {
+      this._render();
+    }
   }
 
   connectedCallback() {
