@@ -3,6 +3,15 @@
  * A Home Assistant Lovelace card to track household chore minutes for children.
  */
 
+const DEFAULT_QUICK_AMOUNTS = [5, 10, 15];
+
+function normalizeQuickAmounts(amounts) {
+  if (!Array.isArray(amounts)) return [...DEFAULT_QUICK_AMOUNTS];
+  return amounts
+    .map(Number)
+    .filter(amount => Number.isInteger(amount) && amount > 0 && amount <= 480);
+}
+
 class ChoreTrackerCard extends HTMLElement {
   constructor() {
     super();
@@ -20,6 +29,7 @@ class ChoreTrackerCard extends HTMLElement {
     this._config = {
       title: config.title || "Chore Tracker",
       children: config.children,
+      quickAmounts: normalizeQuickAmounts(config.quickAmounts),
     };
     this._activeChild = this._config.children[0];
     this._render();
@@ -87,10 +97,12 @@ class ChoreTrackerCard extends HTMLElement {
     }
   }
 
-  async _addEntry() {
+  async _addEntry(minutesOverride = null) {
     const input = this.shadowRoot.querySelector("#minutes-input");
     const noteInput = this.shadowRoot.querySelector("#note-input");
-    const minutes = parseInt(input.value, 10);
+    const minutes = minutesOverride === null
+      ? parseInt(input.value, 10)
+      : parseInt(minutesOverride, 10);
     if (!minutes || minutes <= 0) {
       this._showMessage("Bitte eine gültige Minutenzahl eingeben.", "error");
       return;
@@ -201,6 +213,12 @@ class ChoreTrackerCard extends HTMLElement {
         color: var(--primary-text-color);
         font-size: 1em;
       }
+      .quick-buttons {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
       .btn {
         padding: 8px 18px;
         border: none;
@@ -214,6 +232,10 @@ class ChoreTrackerCard extends HTMLElement {
       .btn-add {
         background: var(--primary-color, #03a9f4);
         color: #fff;
+      }
+      .btn-quick {
+        background: var(--secondary-background-color, #e8e8e8);
+        color: var(--primary-text-color);
       }
       .btn-reset {
         background: var(--error-color, #f44336);
@@ -343,6 +365,10 @@ class ChoreTrackerCard extends HTMLElement {
           `;
         }).join("");
 
+    const quickButtonsHtml = this._config.quickAmounts.map(minutes => `
+      <button class="btn btn-quick" type="button" data-minutes="${minutes}">+${minutes} Min.</button>
+    `).join("");
+
     const html = `
       <style>${styles}</style>
       <ha-card>
@@ -360,6 +386,7 @@ class ChoreTrackerCard extends HTMLElement {
           <input id="note-input" type="text" placeholder="Notiz (optional)" />
           <button class="btn btn-add" id="add-btn">Hinzufügen</button>
         </div>
+        ${quickButtonsHtml ? `<div class="quick-buttons">${quickButtonsHtml}</div>` : ""}
         <div id="status-msg" class="status-msg"></div>
 
         <div class="section-title">Einträge — ${this._activeChild} (${activeChildTotal} Min. gesamt)</div>
@@ -379,6 +406,12 @@ class ChoreTrackerCard extends HTMLElement {
 
     this.shadowRoot.querySelector("#minutes-input").addEventListener("keydown", (e) => {
       if (e.key === "Enter") this._addEntry();
+    });
+
+    this.shadowRoot.querySelectorAll(".btn-quick").forEach(button => {
+      button.addEventListener("click", () => {
+        this._addEntry(button.dataset.minutes);
+      });
     });
 
     this.shadowRoot.querySelectorAll(".summary-card").forEach(card => {
@@ -406,6 +439,7 @@ class ChoreTrackerCard extends HTMLElement {
     return {
       title: "Haushaltsaufgaben",
       children: ["Emma", "Luca"],
+      quickAmounts: [...DEFAULT_QUICK_AMOUNTS],
     };
   }
 }
@@ -426,6 +460,7 @@ class ChoreTrackerCardEditor extends HTMLElement {
       type: config.type || "custom:chore-tracker-card",
       title: config.title || "Haushaltsaufgaben",
       children: config.children || [],
+      quickAmounts: normalizeQuickAmounts(config.quickAmounts),
     };
     this._render();
   }
@@ -471,11 +506,32 @@ class ChoreTrackerCardEditor extends HTMLElement {
         gap: 6px;
         margin-bottom: 8px;
       }
+      .quick-amounts-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
       .child-row {
         display: flex;
         gap: 8px;
         align-items: center;
       }
+      .quick-amount-row {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .quick-amount-row input {
+        width: 100px;
+        padding: 7px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--divider-color, #ccc);
+        background: var(--card-background-color, #fff);
+        color: var(--primary-text-color);
+        font-size: 0.95em;
+      }
+      .quick-amount-row span { color: var(--secondary-text-color); }
       .child-row input {
         flex: 1;
         padding: 7px 10px;
@@ -514,7 +570,25 @@ class ChoreTrackerCardEditor extends HTMLElement {
         justify-content: center;
         transition: background 0.15s;
       }
-      .btn-add-child:hover { background: var(--primary-color-light, #e1f5fe); }
+      .btn-add-child:hover, .btn-add-quick:hover {
+        background: var(--primary-color-light, #e1f5fe);
+      }
+      .btn-add-quick {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: none;
+        border: 2px dashed var(--primary-color, #03a9f4);
+        color: var(--primary-color, #03a9f4);
+        border-radius: 8px;
+        padding: 7px 14px;
+        cursor: pointer;
+        font-size: 0.95em;
+        font-weight: 600;
+        width: 100%;
+        justify-content: center;
+        transition: background 0.15s;
+      }
     `;
 
     const childrenHtml = this._config.children.map((child, i) => `
@@ -523,6 +597,16 @@ class ChoreTrackerCardEditor extends HTMLElement {
         <button class="btn-icon up" data-index="${i}" title="Nach oben">↑</button>
         <button class="btn-icon down" data-index="${i}" title="Nach unten">↓</button>
         <button class="btn-icon delete" data-index="${i}" title="Entfernen">✕</button>
+      </div>
+    `).join("");
+
+    const quickAmountsHtml = this._config.quickAmounts.map((amount, i) => `
+      <div class="quick-amount-row" data-index="${i}">
+        <input type="number" class="quick-amount-input" value="${amount}" min="1" max="480" data-index="${i}" aria-label="Schnellbuchung in Minuten" />
+        <span>Minuten</span>
+        <button class="btn-icon up quick-up" data-index="${i}" title="Nach oben">↑</button>
+        <button class="btn-icon down quick-down" data-index="${i}" title="Nach unten">↓</button>
+        <button class="btn-icon delete quick-delete" data-index="${i}" title="Entfernen">✕</button>
       </div>
     `).join("");
 
@@ -541,6 +625,14 @@ class ChoreTrackerCardEditor extends HTMLElement {
         </div>
         <button class="btn-add-child" id="add-child-btn">+ Kind hinzufügen</button>
       </div>
+
+      <div class="row">
+        <label>Schnellbuchungen</label>
+        <div class="quick-amounts-list" id="quick-amounts-list">
+          ${quickAmountsHtml}
+        </div>
+        <button class="btn-add-quick" id="add-quick-btn">+ Minuten-Button hinzufügen</button>
+      </div>
     `;
 
     // Title change
@@ -553,9 +645,71 @@ class ChoreTrackerCardEditor extends HTMLElement {
     this.shadowRoot.querySelector("#add-child-btn").addEventListener("click", () => {
       this._config = { ...this._config, children: [...this._config.children, ""] };
       this._render();
+      this._dispatchChange();
       // Focus the new input
       const inputs = this.shadowRoot.querySelectorAll(".child-name-input");
       if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+
+    this.shadowRoot.querySelector("#add-quick-btn").addEventListener("click", () => {
+      this._config = {
+        ...this._config,
+        quickAmounts: [...this._config.quickAmounts, 5],
+      };
+      this._render();
+      this._dispatchChange();
+      const inputs = this.shadowRoot.querySelectorAll(".quick-amount-input");
+      if (inputs.length) inputs[inputs.length - 1].focus();
+    });
+
+    this.shadowRoot.querySelectorAll(".quick-amount-input").forEach(input => {
+      input.addEventListener("change", (e) => {
+        const idx = parseInt(e.target.dataset.index, 10);
+        const amount = Number(e.target.value);
+        if (!Number.isInteger(amount) || amount < 1 || amount > 480) {
+          e.target.value = this._config.quickAmounts[idx];
+          return;
+        }
+        const quickAmounts = [...this._config.quickAmounts];
+        quickAmounts[idx] = amount;
+        this._config = { ...this._config, quickAmounts };
+        this._dispatchChange();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll(".quick-delete").forEach(button => {
+      button.addEventListener("click", () => {
+        const idx = parseInt(button.dataset.index, 10);
+        const quickAmounts = [...this._config.quickAmounts];
+        quickAmounts.splice(idx, 1);
+        this._config = { ...this._config, quickAmounts };
+        this._dispatchChange();
+        this._render();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll(".quick-up").forEach(button => {
+      button.addEventListener("click", () => {
+        const idx = parseInt(button.dataset.index, 10);
+        if (idx === 0) return;
+        const quickAmounts = [...this._config.quickAmounts];
+        [quickAmounts[idx - 1], quickAmounts[idx]] = [quickAmounts[idx], quickAmounts[idx - 1]];
+        this._config = { ...this._config, quickAmounts };
+        this._dispatchChange();
+        this._render();
+      });
+    });
+
+    this.shadowRoot.querySelectorAll(".quick-down").forEach(button => {
+      button.addEventListener("click", () => {
+        const idx = parseInt(button.dataset.index, 10);
+        const quickAmounts = [...this._config.quickAmounts];
+        if (idx >= quickAmounts.length - 1) return;
+        [quickAmounts[idx], quickAmounts[idx + 1]] = [quickAmounts[idx + 1], quickAmounts[idx]];
+        this._config = { ...this._config, quickAmounts };
+        this._dispatchChange();
+        this._render();
+      });
     });
 
     // Child name edits, delete, reorder
@@ -569,7 +723,7 @@ class ChoreTrackerCardEditor extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll(".btn-icon.delete").forEach(btn => {
+    this.shadowRoot.querySelectorAll(".child-row .btn-icon.delete").forEach(btn => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.index, 10);
         const children = [...this._config.children];
@@ -580,7 +734,7 @@ class ChoreTrackerCardEditor extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll(".btn-icon.up").forEach(btn => {
+    this.shadowRoot.querySelectorAll(".child-row .btn-icon.up").forEach(btn => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.index, 10);
         if (idx === 0) return;
@@ -592,7 +746,7 @@ class ChoreTrackerCardEditor extends HTMLElement {
       });
     });
 
-    this.shadowRoot.querySelectorAll(".btn-icon.down").forEach(btn => {
+    this.shadowRoot.querySelectorAll(".child-row .btn-icon.down").forEach(btn => {
       btn.addEventListener("click", () => {
         const idx = parseInt(btn.dataset.index, 10);
         const children = [...this._config.children];

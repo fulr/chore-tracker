@@ -45,6 +45,7 @@ All configuration is done through the card editor UI. No YAML required.
 |------------|------------------------------------|
 | `title`    | Card title                         |
 | `children` | List of children's names           |
+| `quickAmounts` | Fixed-minute quick-add buttons (default: 5, 10, and 15 minutes) |
 
 ## Services
 
