@@ -11,6 +11,7 @@ from homeassistant.components import websocket_api
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.components.lovelace.resources import ResourceStorageCollection
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.storage import Store
@@ -49,13 +50,32 @@ RESET_CHILD_SCHEMA = vol.Schema(
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
-    """Set up the Chore Tracker component."""
+    """Set up Chore Tracker from YAML."""
+    if DOMAIN in config:
+        hass.data[f"{DOMAIN}_yaml_configured"] = True
+    return await _async_setup(hass)
+
+
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up Chore Tracker from a config entry."""
+    return await _async_setup(hass)
+
+
+async def _async_setup(hass: HomeAssistant) -> bool:
+    """Set up shared integration functionality."""
+    if DOMAIN in hass.data:
+        return True
 
     # Serve the JS file directly from the integration folder
     js_path = str(Path(__file__).parent / JS_FILENAME)
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(JS_URL, js_path, cache_headers=False)]
-    )
+    try:
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(JS_URL, js_path, cache_headers=False)]
+        )
+    except RuntimeError:
+        # The path can still be registered if the integration is re-added
+        # during the same Home Assistant process.
+        _LOGGER.debug("Static path already registered: %s", JS_URL)
 
     async def _register_frontend(_=None) -> None:
         """Register JS with the frontend and Lovelace once frontend is ready."""
@@ -184,4 +204,15 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
     websocket_api.async_register_command(hass, ws_get_data)
 
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a config entry while preserving YAML-configured instances."""
+    if hass.data.get(f"{DOMAIN}_yaml_configured"):
+        return True
+
+    hass.services.async_remove(DOMAIN, SERVICE_ADD_ENTRY)
+    hass.services.async_remove(DOMAIN, SERVICE_RESET_CHILD)
+    hass.data.pop(DOMAIN, None)
     return True

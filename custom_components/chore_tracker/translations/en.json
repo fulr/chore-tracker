@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up Chore Tracker",
+        "description": "The integration automatically registers the Chore Tracker card with your dashboard."
+      }
+    },
+    "abort": {
+      "already_configured": "Chore Tracker is already set up."
+    }
+  }
+}

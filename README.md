@@ -19,21 +19,22 @@ A Home Assistant custom integration to track household chore minutes for childre
 2. Add this repository URL, category: **Integration**
 3. Install **Chore Tracker**
 4. Restart Home Assistant
+5. Go to **Settings** → **Devices & services** → **Add integration**, then search for **Chore Tracker**
 
-The Lovelace card JS is installed and registered automatically on startup — no manual resource configuration needed.
+Adding the integration registers the Lovelace card automatically — no manual resource configuration or YAML setup is needed.
 
 ## Manual Installation
 
 1. Copy `custom_components/chore_tracker/` into your HA `config/custom_components/` folder
-2. Add `chore_tracker:` to your `configuration.yaml`
-3. Restart Home Assistant
+2. Restart Home Assistant
+3. Go to **Settings** → **Devices & services** → **Add integration**, then search for **Chore Tracker**
 
-The card JS will be copied to `config/www/` and registered as a Lovelace resource automatically.
+Alternatively, add `chore_tracker:` to `configuration.yaml` and restart Home Assistant.
 
 ## Adding the card
 
 1. Open a dashboard → **Edit** → **Add card**
-2. Search for **Chore Tracker**
+2. Select **By card** and search for **Haushaltsaufgaben**
 3. Add children via the visual editor
 
 ## Configuration

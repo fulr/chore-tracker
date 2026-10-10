@@ -1,5 +1,16 @@
 {
   "title": "Haushaltsaufgaben",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Haushaltsaufgaben hinzufügen",
+        "description": "Die Integration registriert die Haushaltsaufgaben-Karte automatisch im Dashboard."
+      }
+    },
+    "abort": {
+      "already_configured": "Haushaltsaufgaben ist bereits eingerichtet."
+    }
+  },
   "services": {
     "add_entry": {
       "name": "Eintrag hinzufügen",

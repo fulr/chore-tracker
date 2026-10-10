@@ -2,6 +2,7 @@
   "domain": "chore_tracker",
   "name": "Chore Tracker",
   "version": "1.0.0",
+  "config_flow": true,
   "documentation": "https://github.com/fulr/chore-tracker",
   "dependencies": ["frontend", "http"],
   "codeowners": [],
