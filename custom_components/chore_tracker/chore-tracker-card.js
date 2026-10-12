@@ -444,7 +444,9 @@ class ChoreTrackerCard extends HTMLElement {
   }
 }
 
-customElements.define("chore-tracker-card", ChoreTrackerCard);
+if (!customElements.get("chore-tracker-card")) {
+  customElements.define("chore-tracker-card", ChoreTrackerCard);
+}
 
 // ─── Card Editor ────────────────────────────────────────────────────────────
 
@@ -760,15 +762,19 @@ class ChoreTrackerCardEditor extends HTMLElement {
   }
 }
 
-customElements.define("chore-tracker-card-editor", ChoreTrackerCardEditor);
+if (!customElements.get("chore-tracker-card-editor")) {
+  customElements.define("chore-tracker-card-editor", ChoreTrackerCardEditor);
+}
 
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "chore-tracker-card",
-  name: "Haushaltsaufgaben",
-  description: "Minuten für Haushaltsaufgaben pro Kind erfassen.",
-  documentationURL: "https://github.com/anomalyco/chore-tracker",
-});
+if (!window.customCards.some(card => card.type === "chore-tracker-card")) {
+  window.customCards.push({
+    type: "chore-tracker-card",
+    name: "Haushaltsaufgaben",
+    description: "Minuten für Haushaltsaufgaben pro Kind erfassen.",
+    documentationURL: "https://github.com/anomalyco/chore-tracker",
+  });
+}
 
 console.info(
   "%c CHORE-TRACKER-CARD %c v1.0.0 ",

@@ -23,7 +23,7 @@ STORAGE_KEY = "chore_tracker.data"
 STORAGE_VERSION = 1
 
 JS_FILENAME = "chore-tracker-card.js"
-JS_VERSION = "12"
+JS_VERSION = "13"
 JS_URL = f"/{DOMAIN}/{JS_FILENAME}"
 JS_URL_VERSIONED = f"{JS_URL}?v={JS_VERSION}"
 
@@ -79,14 +79,11 @@ async def _async_setup(hass: HomeAssistant) -> bool:
 
     async def _register_frontend(_=None) -> None:
         """Register JS with the frontend and Lovelace once frontend is ready."""
-
-        # add_extra_js_url injects it on every page load (works in YAML mode + Cast)
-        add_extra_js_url(hass, JS_URL_VERSIONED)
-
-        # Also register as a persisted Lovelace resource (shows in add-card picker)
         try:
             lovelace = hass.data.get("lovelace")
             if lovelace is None:
+                # Lovelace may not expose a resource collection in YAML mode.
+                add_extra_js_url(hass, JS_URL_VERSIONED)
                 _LOGGER.warning("Lovelace not in hass.data, skipping resource registration")
                 return
 
@@ -96,7 +93,14 @@ async def _async_setup(hass: HomeAssistant) -> bool:
                 else lovelace.get("resources")
             )
             if resources is None:
+                # YAML dashboards do not persist resources, so load the card globally.
+                add_extra_js_url(hass, JS_URL_VERSIONED)
                 return
+
+            # Storage dashboards load registered resources themselves. Injecting
+            # the same module globally as well makes the browser evaluate it twice.
+            if not isinstance(resources, ResourceStorageCollection):
+                add_extra_js_url(hass, JS_URL_VERSIONED)
 
             # Load storage before reading or writing to avoid overwriting other
             # integrations' resources with an empty in-memory collection
